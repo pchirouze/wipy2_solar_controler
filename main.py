@@ -2,9 +2,7 @@
 #        GESTION SOLAIRE SUR WIPY  2        #
 #---------------------------------------------------------#
 """- Lecture de 5 capteurs de température OneWire DS18x20
-        Raccorder un pull de 4.7k entre la pin data et le 3.3V, si vdd et gnd reste a 0
-        alimentation capteur sur GND et VDD 3.3V
-        sinon 'GPx' pour pin gnd et Vdd > alimentation  par ports de sorties        
+        Raccorder un pull de 4.7k entre la pin data et le 3.3V
         T1: Température capteur solaire
         T2: Température bas de cuve
         T3: Température haut de cuve
@@ -18,7 +16,8 @@ from network import  WLAN
 import pycom
 
 # Identifiant interne capteur a changé si changement de capteur(5 derniers digits)
-THERMOMETRES = {27702:'T1', 28196:'T2', 29859:'T3', 27423:'T4', 23570:'T5'}
+## THERMOMETRES = {27702:'T1', 28196:'T2', 29859:'T3', 27423:'T4', 23570:'T5'}
+THERMOMETRES = {41851:'T1', 42299:'T2', 3173:'T3', 51218:'T4', 43760:'T5'}
 # WIFI ID et PSWD
 SSID='freebox_PC'
 PWID='parapente'
@@ -178,6 +177,7 @@ pycom.heartbeat(False)
 #====================
 flag=False
 temp_m1={}
+dev = ds.roms  
 while True:
 # Init Timer pour watchdog
     watchdog=Timer.Alarm(wdt_callback, 20, periodic=False)
@@ -186,12 +186,15 @@ while True:
     temp={}
 #Lecture thermometres OneWire
     tmp =  ds.read_temps()
-    dev = ds.roms    
+#    dev = ds.roms  
+    txn=[]  
 #    print(dev)
     if len(dev) == len(THERMOMETRES):
         for i in range(len(dev)):
+        #    txn.append(int.from_bytes(dev[i][2:4],'little'))
             tx=THERMOMETRES[int.from_bytes(dev[i][2:4],'little')]
             temp[tx]=tmp[i]/100
+        #print (txn)
         if temp_m1=={}: temp_m1=temp.copy()
     else:
         temp['T1']=0
@@ -297,7 +300,7 @@ while True:
             else:
                 client.ping()       # Keep alive command
 
-    time.sleep(1)
+    time.sleep(0.5)
 # Tue l'instance pour relance nouvelle instance Timer watchdog
     watchdog.__del__()
 client.disconnect()
