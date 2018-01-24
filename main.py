@@ -72,6 +72,7 @@ class   Solar_controller():
         self.dT = 0
 
     def run(self, temps, debit, dateh):
+        """ Doc String """
         if e_cde_manu.value() == 1:
             self.dT=temps['T1'] - temps['T2']
             if self.dT > self.secu_th :
@@ -114,12 +115,12 @@ class   Solar_controller():
 #            print(debit) 
             cumul +=  pw   *  (time.ticks_diff(self.start_t,  time.ticks_ms()))/3600000
         else:
-           pw=0 
+            pw=0 
         self.start_t=time.ticks_ms()
         return pw, cumul
 
 # Fonction débimetre par comptage impulsion sur une entrée logique (option)       
-def   debimetre(pin=None, ve=0):
+def   debimetre(pin=None):
     ''' Debimetre a impulsion   ''' 
     if pin is None:
         debit=data_levels['Qs']
@@ -141,14 +142,15 @@ def incoming_mess(topic, msg):
             return
         if topic==b'/regsol/data':
             data_levels = msg.decode().split
-            f=open('param.dat', 'w')
-            f.write(json.dumps(data_levels))
-            f.close()
+            f1=open('param.dat', 'w')
+            f1.write(json.dumps(data_levels))
+            f1.close()
 
 #  Gestion watch dog par callback timer
 def wdt_callback(alarm):
     ''' Fonction reset sur watchdog '''
-    import machine
+    # import machine
+    print(alarm)
     print("\n\nReset par WatchDog\n\n")
     time.sleep(0.5)
     machine.reset()
@@ -223,34 +225,34 @@ while True:
 # cumul journalier de la puissance collecté a 0h01 heure
     print('{} {} {} {}:{}:{}  {}'.format(t[2], t[1], t[0], t[3], t[4], t[5], temp))
     if t[3]==0 and t[4]==1 :
-        if flag==False :
+        if flag is False :
             try:
                 f=open('energie.dat', 'r')
                 a=float(f.read())
             except:
                 f=open('energie.dat', 'w')
-                a=0
+                a=0.0
                 f.write(str(a))
             finally:
                 f.close()
             a+=cumul   
 # Remise a 0 cumul annuel au 1/1 a 0h01
             if t[1]==1 and t[2]==1:
-                a=0
+                a=0.0
             f=open('energie.dat', 'w')
             f.write(str(a))
             f.close()
-            cumul=0
+            cumul=0.0
             flag=True
     else:
         flag=False
         
 #Gestion protocole Telnet, FTP, MQTT en WiFI
 #    print (wifi, mqtt_ok)    
-    if wifi==False: 
+    if wifi is False: 
         wlan=WLAN(mode=WLAN.STA)
         lswifi=wlan.scan()
-        if lswifi==None: lswifi=[] # Bug scan pass
+        if lswifi is None: lswifi=[] # Bug scan pass
         for r in lswifi:
     # freebox et signal > -80 dB                
             if r[0] == SSID and r[4] > -80 :      
@@ -266,7 +268,7 @@ while True:
                 mqtt_ok=False
     else:
     # Creation et initialisation protocole MQTT   
-        if mqtt_ok==False:
+        if mqtt_ok is False:
             print('Connecte WIFI : ',  wlan.ifconfig())
             client =MQTTClient("pchirouze",MQTT_server, port = 1883,  keepalive = 100)
             try:
@@ -289,7 +291,7 @@ while True:
                 client.disconnect()
                 print('MQTT check message entrant erreur')
                 machine.reset()
-            if mes_send==True:
+            if mes_send is True:
                 try:
                     client.publish('/regsol/mesur',json.dumps(temp))
                 except:
