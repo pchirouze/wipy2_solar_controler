@@ -14,30 +14,36 @@ from machine import  Pin, RTC, Timer
 from umqtt import  MQTTClient
 from network import  WLAN
 import pycom
+import _thread
 
-# Identifiant interne capteur a changé si changement de capteur(5 derniers digits)
-## THERMOMETRES = {27702:'T1', 28196:'T2', 29859:'T3', 27423:'T4', 23570:'T5'}
-THERMOMETRES = {41851:'T1', 42299:'T2', 3173:'T3', 51218:'T4', 43760:'T5'}
+# ----------- Constantes -------------
 # WIFI ID et PSWD
 SSID='freebox_PC'
 PWID='parapente'
 # N° port commande circulateur solaire
 CDE_POMPE = 'P19'    
 # N° port data bus OneWire
-p_bus_ow = 'P22' 
+P_BUS_OW = 'P22' 
 # N° port marche manuelle circulateur
-p_circ_manu = 'P4'
+P_CIRC_MANU = 'P4'
+# Entée impulsion débimetre
+P_FLOWMETER = 'P21'
 #  Liste parametres Dt sécurité choc th(SPh), Dt seuil marche pompe(SPn),Tcpt sécurité gel(SPb), debit(Qs) , N
 data_levels={'SPh':50.00, 'SPn':4.50, 'SPb': -12.00, 'Qs':720,  'N':5}  
+VOL_PULSE = 0.00444 # Litre par pulse du débimetre
+ON=const(1)
+OFF=const(0)
 
+#------------- Variables globales -----------------
 mes_send=False
 cumul=0.0
 MQTT_server="iot.eclipse.org"
 wifi = False
 mqtt_ok = False
-
-ON=const(1)
-OFF=const(0)
+# Pas de débimetre > counter = None
+#counter = None
+# Débimetre > counter = 0
+counter = 0
 
 class   Solar_controller():
     """   ---- Classe regulation solaire ----
@@ -70,17 +76,24 @@ class   Solar_controller():
         self.start_t=time.ticks_ms()
         self.pompe(OFF)
         self.dT = 0
+        self.deb = 0
+        self.pulse_count = 0
+        self.t_cycle = 0
+        self.t_debut = time.ticks_ms()
 
-    def run(self, temps, debit, dateh):
+    def run(self, temps, dateh):
         """ Doc String """
-        if e_cde_manu.value() == 1:
+        self.debit = self._flowmeter(counter)
+        temps['Q'] = self.debit
+        # print(self.debit)
+        if e_cde_manu.value() == 1:         # En manuel = 0
             self.dT=temps['T1'] - temps['T2']
             if self.dT > self.secu_th :
             # Sécurité choc thermique dT > 50.0°C(demarrage pompe par impulsion)            
                 self.cpt+=1
                 if self.cpt==1:
                     self.pompe(ON)
-                    self.pw,  self.ew = self._calc_puissance(temps['T4'],  temps['T5'], debit)
+                    self.pw,  self.ew = self._calc_puissance(temps['T4'],  temps['T5'], self.debit)
                 elif self.cpt < self.N:
                     self.pompe(OFF)
                     self.pw =0
@@ -89,7 +102,7 @@ class   Solar_controller():
             # Test pour marche normale
             elif self.dT > self.seuil_start:
                 self.pompe(ON)
-                self.pw,  self.ew = self._calc_puissance(temps['T4'],  temps['T5'], debit)
+                self.pw,  self.ew = self._calc_puissance(temps['T4'],  temps['T5'], self.debit)
             # Test pour securité capteur solaire fort gel
             elif temps['T1'] < self.seuil_tb:
                 self.pompe(ON)
@@ -107,12 +120,12 @@ class   Solar_controller():
             self.pompe(ON)
             return self.pw,  self.ew ,  self.pompe()
 
-    def _calc_puissance(self,  ta, td, debit):
+    def _calc_puissance(self,  ta, td, flow):
         global cumul
 #        print(ta, td, debit, ew)
-        if debit > 0:
-            pw=((ta-td)*1.16*debit)
-#            print(debit) 
+        if flow > 0:
+            pw=((ta-td)*1.16*flow)
+#            print(flow) 
             cumul +=  pw   *  (time.ticks_diff(self.start_t,  time.ticks_ms()))/3600000
         else:
             pw=0 
@@ -120,13 +133,23 @@ class   Solar_controller():
         return pw, cumul
 
 # Fonction débimetre par comptage impulsion sur une entrée logique (option)       
-def   debimetre(pin=None):
-    ''' Debimetre a impulsion   ''' 
-    if pin is None:
-        debit=data_levels['Qs']
-        return debit
-    else:
-        pass
+    def   _flowmeter(self, cnt=None):
+        ''' Debimetre a impulsion   ''' 
+        global counter
+        if cnt is None:
+            self.deb=data_levels['Qs']
+            return self.deb
+        else:
+            lock.acquire()
+            self.pulse_count = counter
+            counter=0
+            lock.release()
+            self.t_cycle = time.ticks_diff(self.t_debut, time.ticks_ms())
+            self.t_debut = time.ticks_ms()
+            self.deb = int(self.pulse_count * 3600000/ self.t_cycle * VOL_PULSE)
+            return self.deb
+            
+            
 
   # Callbacks connexion MQTT protocole to free broker 
 def incoming_mess(topic, msg):
@@ -155,11 +178,20 @@ def wdt_callback(alarm):
     time.sleep(0.5)
     machine.reset()
 
+# Callback function for each rising edge pulse 
+def PinPulsecounter(arg):
+    global counter
+    if counter is not None:
+        if lock.locked() is not True:
+            lock.acquire()
+            counter +=1
+            lock.release()
+    
 
 #============= Debut Programme ====================        
-ds=onewire.DS18X20(onewire.OneWire(Pin(p_bus_ow)))
+ds=onewire.DS18X20(onewire.OneWire(Pin(P_BUS_OW)))
 reg=Solar_controller(Pin(CDE_POMPE), data_levels)
-e_cde_manu = Pin(p_circ_manu,mode=Pin.IN)
+e_cde_manu = Pin(P_CIRC_MANU,mode=Pin.IN)
 
 # Lecture fichier parametres
 try:
@@ -178,50 +210,30 @@ pycom.heartbeat(False)
 # Boucle main
 #====================
 flag=False
-temp_m1={}
-dev = ds.roms  
+
+inp_count = Pin(P_FLOWMETER,mode=Pin.IN)
+inp_count.callback(Pin.IRQ_RISING, PinPulsecounter)
+lock = _thread.allocate_lock()
+temp={}
+thermometres = {}
+dev = ds.roms 
+for i in range(len(dev)):
+    thermometres['T'+ chr(0x31+i)] = dev[i]
+
 while True:
 # Init Timer pour watchdog
     watchdog=Timer.Alarm(wdt_callback, 20, periodic=False)
     pycom.rgbled(0x000800)
     t=time.localtime()
-    temp={}
-#Lecture thermometres OneWire
-    tmp =  ds.read_temps()
-#    dev = ds.roms  
-    txn=[]  
-#    print(dev)
-    if len(dev) == len(THERMOMETRES):
-        for i in range(len(dev)):
-        #    txn.append(int.from_bytes(dev[i][2:4],'little'))
-            tx=THERMOMETRES[int.from_bytes(dev[i][2:4],'little')]
-            temp[tx]=tmp[i]/100
-        #print (txn)
-        if temp_m1=={}: temp_m1=temp.copy()
-    else:
-        temp['T1']=0
-        temp['T2']=0 
-        temp['T3']=0
-        temp['T4']=0
-        temp['T5']=0    
-        print('Defaut lecture thermometres')   
-        temp_m1 = temp.copy()            
-# Enleve erreur de mesure eventuelle
-    for key in temp.keys():
-        ecart= temp[key] - temp_m1[key]
-        if abs(ecart) > 10.0 :
-            print('Mesure {} errone {} C'.format(key, temp[key]))
-            temp[key]=temp_m1[key]
-    temp_m1=temp.copy()
+
+#Lecture thermometres OneWire (Raffraichi un thermometre par boucle)
+    for key in thermometres:
+        temp[key] = ds.read_temp_async(thermometres[key])/100.0
+        ds.start_convertion(thermometres[key])
+        time.sleep(0.7)
 
 # Gestion solaire
-    a,  b, circul = reg.run(temp, debimetre(), t )
-    temp['PWR']= a
-    temp['ENR']= b
-    if circul==1: 
-        temp['PMP']= 0
-    else:
-        temp['PMP']= 1
+    temp['PWR'], temp['ENR'], temp['PMP'] = reg.run(temp, t )
 # cumul journalier de la puissance collecté a 0h01 heure
     print('{} {} {} {}:{}:{}  {}'.format(t[2], t[1], t[0], t[3], t[4], t[5], temp))
     if t[3]==0 and t[4]==1 :
@@ -301,9 +313,6 @@ while True:
                     machine.reset()
             else:
                 client.ping()       # Keep alive command
-
-    time.sleep(0.5)
-# Tue l'instance pour relance nouvelle instance Timer watchdog
     watchdog.__del__()
 client.disconnect()
 
