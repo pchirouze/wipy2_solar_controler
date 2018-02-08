@@ -148,10 +148,8 @@ class   Solar_controller():
             self.t_debut = time.ticks_ms()
             self.deb = int(self.pulse_count * 3600000/ self.t_cycle * VOL_PULSE)
             return self.deb
-            
-            
 
-  # Callbacks connexion MQTT protocole to free broker 
+# Callbacks connexion MQTT protocole to free broker 
 def incoming_mess(topic, msg):
     ''' Callback sur reception message '''
     global mes_send, data_levels
@@ -262,9 +260,12 @@ while True:
 #Gestion protocole Telnet, FTP, MQTT en WiFI
 #    print (wifi, mqtt_ok)    
     if wifi is False: 
+        lswifi=[]
         wlan=WLAN(mode=WLAN.STA)
-        lswifi=wlan.scan()
-        if lswifi is None: lswifi=[] # Bug scan pass
+        try:
+            lswifi=wlan.scan()
+        except:
+            print('Pas de wifi')
         for r in lswifi:
     # freebox et signal > -80 dB                
             if r[0] == SSID and r[4] > -80 :      
@@ -280,6 +281,7 @@ while True:
                 mqtt_ok=False
     else:
     # Creation et initialisation protocole MQTT   
+        if not wlan.isconnected(): wifi=False
         if mqtt_ok is False:
             print('Connecte WIFI : ',  wlan.ifconfig())
             client =MQTTClient("pchirouze",MQTT_server, port = 1883,  keepalive = 100)
