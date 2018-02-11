@@ -33,6 +33,7 @@ data_levels={'SPh':50.00, 'SPn':4.50, 'SPb': -12.00, 'Qs':720,  'N':5}
 VOL_PULSE = 0.00444 # Litre par pulse du débimetre
 ON=const(1)
 OFF=const(0)
+NBTHERMO = 5 
 
 #------------- Variables globales -----------------
 mes_send=False
@@ -178,7 +179,9 @@ def wdt_callback(alarm):
 
 # Callback function for each rising edge pulse 
 def PinPulsecounter(arg):
+    ''' Debimétre a detecteur effet hall (fréquence f(Q)) '''
     global counter
+
     if counter is not None:
         if lock.locked() is not True:
             lock.acquire()
@@ -202,7 +205,29 @@ finally:
     f=open('param.dat','w')
     f.write(json.dumps(data_levels))
     f.close()
-# LED 3 couleurs carte Wipy
+
+# Lecture fichiers affections thermometres
+try:
+    f=open('thermo.dat', 'r')
+    data=f.read()
+    thermometres = json.loads(data)
+except:
+    print('Erreur lecture fichier thermometres')
+    thermometres = {}
+    dev = ds.roms
+    if len(dev) == NBTHERMO:
+# Affectation des thermometres et enregistrement
+        for i in range(len(dev)):
+            thermometres['T'+ chr(0x31+i)] = int.from_bytes(dev[i],'little')
+        f=open('thermo.dat','w')
+        f.write(json.dumps(thermometres))
+    else:
+        print('Seulement ', len(dev), 'thermometres detectés sur ', NBTHERMO )
+        machine.reset()
+finally:
+    f.close()
+
+# Led heartbeat 
 pycom.heartbeat(False)
 #====================
 # Boucle main
@@ -213,10 +238,6 @@ inp_count = Pin(P_FLOWMETER,mode=Pin.IN)
 inp_count.callback(Pin.IRQ_RISING, PinPulsecounter)
 lock = _thread.allocate_lock()
 temp={}
-thermometres = {}
-dev = ds.roms 
-for i in range(len(dev)):
-    thermometres['T'+ chr(0x31+i)] = dev[i]
 
 while True:
 # Init Timer pour watchdog
@@ -226,12 +247,18 @@ while True:
 
 #Lecture thermometres OneWire (Raffraichi un thermometre par boucle)
     for key in thermometres:
-        temp[key] = ds.read_temp_async(thermometres[key])/100.0
-        ds.start_convertion(thermometres[key])
+        idt= thermometres[key].to_bytes(8,'little')
+        t_lue = ds.read_temp_async(idt)/100.0
+        if t_lue >=4095 :
+            print('Defaut capteur ',key )
+            temp[key]=0.0
+        else:
+            temp[key] = t_lue
+        ds.start_convertion(idt)
         time.sleep(0.7)
 
 # Gestion solaire
-    temp['PWR'], temp['ENR'], temp['PMP'] = reg.run(temp, t )
+    temp['PWR'], temp['ENR'], temp['PMP'] = reg.run(temp, t)
 # cumul journalier de la puissance collecté a 0h01 heure
     print('{} {} {} {}:{}:{}  {}'.format(t[2], t[1], t[0], t[3], t[4], t[5], temp))
     if t[3]==0 and t[4]==1 :
