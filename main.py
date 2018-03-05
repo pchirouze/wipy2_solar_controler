@@ -41,9 +41,9 @@ cumul=0.0
 MQTT_server="iot.eclipse.org"
 wifi = False
 mqtt_ok = False
-# Pas de débimetre > counter = None
+# Pas de débimetre >>> counter = None
 #counter = None
-# Débimetre > counter = 0
+# Débimetre >>> counter = 0
 counter = 0
 
 class   Solar_controller():
@@ -188,11 +188,20 @@ def PinPulsecounter(arg):
             counter +=1
             lock.release()
     
-
+#
 #============= Debut Programme ====================        
+#
+flag=False
+inp_count = Pin(P_FLOWMETER,mode=Pin.IN)
+inp_count.callback(Pin.IRQ_RISING, PinPulsecounter)
+lock = _thread.allocate_lock()
+temp={}
+
 ds=onewire.DS18X20(onewire.OneWire(Pin(P_BUS_OW)))
 reg=Solar_controller(Pin(CDE_POMPE), data_levels)
 e_cde_manu = Pin(P_CIRC_MANU,mode=Pin.IN)
+# Led heartbeat 
+pycom.heartbeat(False)
 
 # Lecture fichier parametres
 try:
@@ -216,9 +225,9 @@ except:
     thermometres = {}
     dev = ds.roms
     if len(dev) == NBTHERMO:
-# Affectation des thermometres et enregistrement
+# Affectation des thermometres et enregistrement (converti ID en int: bug bytearray en json)
         for i in range(len(dev)):
-            thermometres['T'+ chr(0x31+i)] = int.from_bytes(dev[i],'little')
+            thermometres['T'+ chr(0x31+i)] = int.from_bytes(dev[i],'little') 
         f=open('thermo.dat','w')
         f.write(json.dumps(thermometres))
     else:
@@ -227,18 +236,9 @@ except:
 finally:
     f.close()
 
-# Led heartbeat 
-pycom.heartbeat(False)
 #====================
 # Boucle main
 #====================
-flag=False
-
-inp_count = Pin(P_FLOWMETER,mode=Pin.IN)
-inp_count.callback(Pin.IRQ_RISING, PinPulsecounter)
-lock = _thread.allocate_lock()
-temp={}
-
 while True:
 # Init Timer pour watchdog
     watchdog=Timer.Alarm(wdt_callback, 20, periodic=False)
@@ -249,7 +249,7 @@ while True:
     for key in thermometres:
         idt= thermometres[key].to_bytes(8,'little')
         t_lue = ds.read_temp_async(idt)/100.0
-        if t_lue >=4095 :
+        if t_lue >=4095 : # ds18 debranché valeur = 4095.xx
             print('Defaut capteur ',key )
             temp[key]=0.0
         else:
