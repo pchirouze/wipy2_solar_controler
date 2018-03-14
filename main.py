@@ -16,6 +16,10 @@ from network import  WLAN
 import pycom
 import _thread
 
+# ----------  Configuration ----------
+WATCHDOG = True
+#WATCHDOG = False
+
 # ----------- Constantes -------------
 # WIFI ID et PSWD
 SSID='freebox_PC'
@@ -240,8 +244,10 @@ finally:
 # Boucle main
 #====================
 while True:
-# Init Timer pour watchdog
-    watchdog=Timer.Alarm(wdt_callback, 20, periodic=False)
+# Init watchdog
+#    watchdog=Timer.Alarm(wdt_callback, 20, periodic=False)
+    if WATCHDOG:
+        wdg =machine.WDT(timeout = 15000)
     pycom.rgbled(0x000800)
     t=time.localtime()
 
@@ -311,7 +317,7 @@ while True:
         if not wlan.isconnected(): wifi=False
         if mqtt_ok is False:
             print('Connecte WIFI : ',  wlan.ifconfig())
-            client =MQTTClient("pchirouze",MQTT_server, port = 1883,  keepalive = 100)
+            client =MQTTClient("solaire",MQTT_server, port = 1883,  keepalive = 100)
             try:
                 client.connect(clean_session=True)
                 client.set_callback(incoming_mess)
@@ -342,6 +348,7 @@ while True:
                     machine.reset()
             else:
                 client.ping()       # Keep alive command
-    watchdog.__del__()
+    if WATCHDOG:
+        wdg.feed()
 client.disconnect()
 
