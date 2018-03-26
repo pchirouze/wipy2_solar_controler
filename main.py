@@ -19,7 +19,8 @@ import _thread
 # ----------  Configuration ----------
 WATCHDOG = True
 #WATCHDOG = False
-
+DEBUG = True
+#DEBUG = False
 # ----------- Constantes -------------
 # WIFI ID et PSWD
 SSID='freebox_PC'
@@ -43,12 +44,11 @@ NBTHERMO = 5
 mes_send=False
 cumul=0.0
 MQTT_server="iot.eclipse.org"
-wifi = False
-mqtt_ok = False
-# Pas de débimetre >>> counter = None
-#counter = None
-# Débimetre >>> counter = 0
-counter = 0
+etape_wifi = 0
+# Pas de débimetre : counter = None
+counter = None
+# Débimetre : counter = 0
+#counter = 0
 
 class   Solar_controller():
     """   ---- Classe regulation solaire ----
@@ -94,7 +94,7 @@ class   Solar_controller():
         if e_cde_manu.value() == 1:         # En manuel = 0
             self.dT=temps['T1'] - temps['T2']
             if self.dT > self.secu_th :
-            # Sécurité choc thermique dT > 50.0°C(demarrage pompe par impulsion)            
+        # Sécurité choc thermique dT > 50.0°C(demarrage pompe par impulsion)            
                 self.cpt+=1
                 if self.cpt==1:
                     self.pompe(ON)
@@ -158,8 +158,9 @@ class   Solar_controller():
 def incoming_mess(topic, msg):
     ''' Callback sur reception message '''
     global mes_send, data_levels
+    if DEBUG : print(topic.decode(), msg.decode())
     if topic is not None : 
-        print(topic.decode(), msg.decode())
+
         if topic==b'/regsol/cde' and  msg == b'start':
             mes_send =True
             return
@@ -171,6 +172,8 @@ def incoming_mess(topic, msg):
             f1=open('param.dat', 'w')
             f1.write(json.dumps(data_levels))
             f1.close()
+#        if topic==b'/regchauf/mesur':   #-------------- Essai Ok --------
+#            print(msg.decode().split)
 
 #  Gestion watch dog par callback timer
 def wdt_callback(alarm):
@@ -243,6 +246,9 @@ finally:
 #====================
 # Boucle main
 #====================
+all_th = False
+all_t_read = 0
+
 while True:
 # Init watchdog
 #    watchdog=Timer.Alarm(wdt_callback, 20, periodic=False)
@@ -262,93 +268,96 @@ while True:
             temp[key] = t_lue
         ds.start_convertion(idt)
         time.sleep(0.7)
-
-# Gestion solaire
-    temp['PWR'], temp['ENR'], temp['PMP'] = reg.run(temp, t)
-# cumul journalier de la puissance collecté a 0h01 heure
-    print('{} {} {} {}:{}:{}  {}'.format(t[2], t[1], t[0], t[3], t[4], t[5], temp))
-    if t[3]==0 and t[4]==1 :
-        if flag is False :
-            try:
-                f=open('energie.dat', 'r')
-                a=float(f.read())
-            except:
-                f=open('energie.dat', 'w')
-                a=0.0
-                f.write(str(a))
-            finally:
-                f.close()
-            a+=cumul   
-# Remise a 0 cumul annuel au 1/1 a 0h01
-            if t[1]==1 and t[2]==1:
-                a=0.0
-            f=open('energie.dat', 'w')
-            f.write(str(a))
-            f.close()
-            cumul=0.0
-            flag=True
-    else:
-        flag=False
-        
-#Gestion protocole Telnet, FTP, MQTT en WiFI
-#    print (wifi, mqtt_ok)    
-    if wifi is False: 
-        lswifi=[]
-        wlan=WLAN(mode=WLAN.STA)
-        try:
-            lswifi=wlan.scan()
-        except:
-            print('Pas de wifi')
-        for r in lswifi:
-    # freebox et signal > -80 dB                
-            if r[0] == SSID and r[4] > -80 :      
-#                wlan.ifconfig(config=('192.168.0.30', '255.255.255.0', '192.168.0.254', '212.27.40.240'))        
-                if not wlan.isconnected():
-                    wlan.ifconfig(config='dhcp')
-                    wlan.connect(SSID, auth=(WLAN.WPA2, PWID), timeout=50)
-                    time.sleep(2)       # Time sleep indispensable
-                wifi=True
-                rtc=RTC()
-                rtc.ntp_sync("pool.ntp.org")
-                time.timezone(3600)
-                mqtt_ok=False
-    else:
-    # Creation et initialisation protocole MQTT   
-        if not wlan.isconnected(): wifi=False
-        if mqtt_ok is False:
-            print('Connecte WIFI : ',  wlan.ifconfig())
-            client =MQTTClient("solaire",MQTT_server, port = 1883,  keepalive = 100)
-            try:
-                client.connect(clean_session=True)
-                client.set_callback(incoming_mess)
-                client.subscribe('/regsol/cde', qos= 0)
-                #print('Connecte WIFI : ',  wlan.ifconfig())
-                print('Connecte au serveur MQTT : ',  MQTT_server)
-                mqtt_ok = True
-            except:
-                print('MQTT connexion erreur')
-                #client.disconnect()
-                mqtt_ok=False
-                #machine.reset()
+        if all_t_read == NBTHERMO:
+            all_th = True
         else:
-            try:
-                client.check_msg()
-            except:
-                mqtt_ok=False
-                client.disconnect()
-                print('MQTT check message entrant erreur')
-                machine.reset()
-            if mes_send is True:
-                try:
-                    client.publish('/regsol/mesur',json.dumps(temp))
-                except:
-                    mqtt_ok=False
-                    client.disconnect()
-                    print('MQTT publication erreur')
-                    machine.reset()
+            all_t_read +=1
+        
+        if all_th is True:
+# Gestion solaire
+            temp['PWR'], temp['ENR'], temp['PMP'] = reg.run(temp, t)
+# cumul journalier de la puissance collecté a 0h01 heure
+            print('{} {} {} {}:{}:{}  {}'.format(t[2], t[1], t[0], t[3], t[4], t[5], temp))
+            if t[3]==0 and t[4]==1 :
+                if flag is False :
+                    try:
+                        f=open('energie.dat', 'r')
+                        a=float(f.read())
+                    except:
+                        f=open('energie.dat', 'w')
+                        a=0.0
+                        f.write(str(a))
+                    finally:
+                        f.close()
+                    a+=cumul   
+# Remise a 0 cumul annuel au 1/1 a 0h01
+                    if t[1]==1 and t[2]==1:
+                        a=0.0
+                    f=open('energie.dat', 'w')
+                    f.write(str(a))
+                    f.close()
+                    cumul=0.0
+                    flag=True
             else:
-                client.ping()       # Keep alive command
-    if WATCHDOG:
-        wdg.feed()
+                flag=False
+                
+#Etape 0 : Initialisation connexion WIFI
+            if etape_wifi == 0:
+                lswifi=[]
+                wlan=WLAN(mode=WLAN.STA)
+                try:
+                    lswifi=wlan.scan()
+                except:
+                    print('Pas de wifi')
+                for r in lswifi:
+# freebox et signal > -80 dB                
+                    if r[0] == SSID and r[4] > -80 :      
+# Initialisation connexion WIFI
+                        wlan.ifconfig(config='dhcp')
+                        wlan.connect(SSID, auth=(WLAN.WPA2, PWID), timeout=50)
+                        time.sleep(2)       # Time sleep indispensable
+                        etape_wifi=1
+
+# Etape 1 : Attente connexion WIFI etablie
+            if etape_wifi == 1:
+                if wlan.isconnected():
+                    print('Connecte WIFI : ',  wlan.ifconfig())
+# Lecture fournisseur date/heure et init timer, creation client MQTT
+                    rtc=RTC()
+                    rtc.ntp_sync("pool.ntp.org")
+                    time.timezone(3600)
+                    client = MQTTClient("solaire",MQTT_server, port = 1883,  keepalive = 100)
+# Connexion MQTT
+                    try:
+                        client.connect(clean_session=True)
+                        client.set_callback(incoming_mess)
+                        client.subscribe('/regsol/cde', qos= 0)
+# client.subscribe('/regchauf/mesur', qos=0)    #------ Essai Ok -------
+                        print('Connecte au serveur MQTT : ',  MQTT_server)
+                        etape_wifi = 2
+                    except:
+                        print('MQTT connexion erreur')
+
+# Etape 2 : Connexion WIFI et broker MQTT Ok, traite message publié et souscrit  
+            if etape_wifi == 2:
+                if not wlan.isconnected():
+                    etape_wifi = 0
+                try:
+                    client.check_msg()
+                except:
+                    client.disconnect()
+                    print('MQTT check message entrant erreur')
+                if mes_send is True:
+                    if DEBUG: print('Message MQTT: ', temp)
+                    try:
+                        client.publish('/regsol/mesur',json.dumps(temp))
+                    except:
+                        client.disconnect()
+                        print('MQTT publication erreur')
+                else:
+                    client.ping()       # Keep alive command
+        #time.sleep(0.5)
+        if DEBUG: print('EtapeWifi : ', etape_wifi)
+        if WATCHDOG: wdg.feed()
 client.disconnect()
 
