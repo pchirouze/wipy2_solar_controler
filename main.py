@@ -158,13 +158,13 @@ class   Solar_controller():
 def incoming_mess(topic, msg):
     ''' Callback sur reception message '''
     global mes_send, data_levels
-    if DEBUG : print(topic.decode(), msg.decode())
-    if topic is not None : 
 
-        if topic==b'/regsol/cde' and  msg == b'start':
+    if topic is not None : 
+        if DEBUG : print('Subscribed: ', topic.decode(), msg.decode())
+        if topic==b'/regsol/send' and  msg == b'start':
             mes_send =True
             return
-        if topic== b'/regsol/cde' and msg == b'stop':
+        if topic== b'/regsol/send' and msg == b'stop':
             mes_send =False
             return
         if topic==b'/regsol/data':
@@ -259,15 +259,15 @@ while True:
 
 #Lecture thermometres OneWire (Raffraichi un thermometre par boucle)
     for key in thermometres:
-        idt= thermometres[key].to_bytes(8,'little')
+        idt= thermometres[key].to_bytes(8,'little')        
+        ds.start_convertion(idt)
+        time.sleep(0.7)
         t_lue = ds.read_temp_async(idt)/100.0
         if t_lue >=4095 : # ds18 debranché valeur = 4095.xx
             print('Defaut capteur ',key )
             temp[key]=0.0
         else:
             temp[key] = t_lue
-        ds.start_convertion(idt)
-        time.sleep(0.7)
         if all_t_read == NBTHERMO:
             all_th = True
         else:
@@ -331,7 +331,7 @@ while True:
                     try:
                         client.connect(clean_session=True)
                         client.set_callback(incoming_mess)
-                        client.subscribe('/regsol/cde', qos= 0)
+                        client.subscribe('/regsol/send', qos= 0)
 # client.subscribe('/regchauf/mesur', qos=0)    #------ Essai Ok -------
                         print('Connecte au serveur MQTT : ',  MQTT_server)
                         etape_wifi = 2
@@ -348,7 +348,7 @@ while True:
                     client.disconnect()
                     print('MQTT check message entrant erreur')
                 if mes_send is True:
-                    if DEBUG: print('Message MQTT: ', temp)
+                    if DEBUG: print('Message MQTT: ', json.dumps(temp))
                     try:
                         client.publish('/regsol/mesur',json.dumps(temp))
                     except:
