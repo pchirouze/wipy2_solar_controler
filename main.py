@@ -42,11 +42,6 @@ NBTHERMO = 5
 
 #------------- Variables globales -----------------
 mes_send=False
-if pycom.nvs_get('power') is None:
-    pycom.nvs_set('power',0)
-    cumul = 0.0
-else:
-    cumul = float(pycom.nvs_get('power'))
 
 #MQTT_server="iot.eclipse.org"
 MQTT_server="m23.cloudmqtt.com"
@@ -83,8 +78,12 @@ class   Solar_controller():
         self.debit=int(data['Qs'])
         self.N=int(data['N'])
         self.cpt=0
-        self.pw=0
-        self.ew = 0
+        if pycom.nvs_get('power') is None:
+            pycom.nvs_set('power',0)
+            self.ew = 0.0
+        else:
+            self.ew = float(pycom.nvs_get('power')/100)
+        self.pw=0.0
         self.start_t=time.ticks_ms()
         self.pompe(OFF)
         self.dT = 0
@@ -105,7 +104,7 @@ class   Solar_controller():
                 self.cpt+=1
                 if self.cpt==1:
                     self.pompe(ON)
-                    self.pw,  self.ew = self._calc_puissance(temps['T4'],  temps['T5'], self.debit)
+                    self._calc_puissance(temps['T4'],  temps['T5'], self.debit)
                 elif self.cpt < self.N:
                     self.pompe(OFF)
                     self.pw =0
@@ -114,7 +113,7 @@ class   Solar_controller():
             # Test pour marche normale
             elif self.dT > self.seuil_start:
                 self.pompe(ON)
-                self.pw,  self.ew = self._calc_puissance(temps['T4'],  temps['T5'], self.debit)
+                self._calc_puissance(temps['T4'],  temps['T5'], self.debit)
             # Test pour securité capteur solaire fort gel
             elif temps['T1'] < self.seuil_tb:
                 self.pompe(ON)
@@ -130,20 +129,20 @@ class   Solar_controller():
         else:
             print('Cde manuelle circulateur active')
             self.pompe(ON)
-            return self.pw,  self.ew ,  self.pompe()
+            return self.pw,  self.ew,  self.pompe()
 
     def _calc_puissance(self,  ta, td, flow):
-        global cumul
-#        print(ta, td, debit, ew)
         if flow > 0:
-            pw=((ta-td)*1.16*flow)
-#            print(flow) 
-            cumul +=  pw   *  (time.ticks_diff(self.start_t,  time.ticks_ms()))/3600000
-            pycom.nvs_set('power',int(cumul))
+            self.pw=((ta-td)*1.16*flow/1000)
+            if self.pw > 0:
+                self.ew +=  self.pw   *  (time.ticks_diff(self.start_t,  time.ticks_ms()))/3600000
+            else:
+                self.pw = 0 
+            pycom.nvs_set('power',int(self.ew*100))
         else:
-            pw=0 
+            self.pw=0 
         self.start_t=time.ticks_ms()
-        return pw, cumul
+        return
 
 # Fonction débimetre par comptage impulsion sur une entrée logique (option)       
     def   _flowmeter(self, cnt=None):
@@ -274,7 +273,7 @@ while True:
         if all_th is True:
 # Gestion solaire
             temp['PWR'], temp['ENR'], temp['PMP'] = reg.run(temp, t)
-# cumul journalier de la puissance collecté a 0h01 heure
+# Cumul journalier de la puissance collecté a 0h01 heure
             print('{} {} {} {}:{}:{}  {}'.format(t[2], t[1], t[0], t[3], t[4], t[5], temp))
             if t[3]==0 and t[4]==1 :
                 if flag is False :
@@ -287,14 +286,14 @@ while True:
                         f.write(str(a))
                     finally:
                         f.close()
-                    a+=cumul   
+                        a += temp['ENR']
 # Remise a 0 cumul annuel au 1/1 a 0h01
                     if t[1]==1 and t[2]==1:
                         a=0.0
                     f=open('energie.dat', 'w')
                     f.write(str(a))
                     f.close()
-                    cumul=0.0
+                    temp['ENR'] = 0.0
                     flag=True
             else:
                 flag=False
