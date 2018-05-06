@@ -42,8 +42,15 @@ NBTHERMO = 5
 
 #------------- Variables globales -----------------
 mes_send=False
-cumul=0.0
-MQTT_server="iot.eclipse.org"
+if pycom.nvs_get('power') is None:
+    pycom.nvs_set('power',0)
+    cumul = 0.0
+else:
+    cumul = float(pycom.nvs_get('power'))
+
+#MQTT_server="iot.eclipse.org"
+MQTT_server="m23.cloudmqtt.com"
+MQTT_port = 1883
 etape_wifi = 0
 # Pas de débimetre : counter = None
 counter = None
@@ -77,7 +84,7 @@ class   Solar_controller():
         self.N=int(data['N'])
         self.cpt=0
         self.pw=0
-        self.ew=0
+        self.ew = 0
         self.start_t=time.ticks_ms()
         self.pompe(OFF)
         self.dT = 0
@@ -132,6 +139,7 @@ class   Solar_controller():
             pw=((ta-td)*1.16*flow)
 #            print(flow) 
             cumul +=  pw   *  (time.ticks_diff(self.start_t,  time.ticks_ms()))/3600000
+            pycom.nvs_set('power',int(cumul))
         else:
             pw=0 
         self.start_t=time.ticks_ms()
@@ -174,15 +182,6 @@ def incoming_mess(topic, msg):
             f1.close()
 #        if topic==b'/regchauf/mesur':   #-------------- Essai Ok --------
 #            print(msg.decode().split)
-
-#  Gestion watch dog par callback timer
-def wdt_callback(alarm):
-    ''' Fonction reset sur watchdog '''
-    # import machine
-    print(alarm)
-    print("\n\nReset par WatchDog\n\n")
-    time.sleep(0.5)
-    machine.reset()
 
 # Callback function for each rising edge pulse 
 def PinPulsecounter(arg):
@@ -243,20 +242,19 @@ except:
 finally:
     f.close()
 
+all_th = False
+all_t_read = 0
+alive = False
+on_time = False
+# Init watchdog
+if WATCHDOG:
+    wdg =machine.WDT(timeout = 15000)
+pycom.rgbled(0x000800)
 #====================
 # Boucle main
 #====================
-all_th = False
-all_t_read = 0
-
 while True:
-# Init watchdog
-#    watchdog=Timer.Alarm(wdt_callback, 20, periodic=False)
-    if WATCHDOG:
-        wdg =machine.WDT(timeout = 15000)
-    pycom.rgbled(0x000800)
     t=time.localtime()
-
 #Lecture thermometres OneWire (Raffraichi un thermometre par boucle)
     for key in thermometres:
         idt= thermometres[key].to_bytes(8,'little')        
@@ -326,7 +324,7 @@ while True:
                     rtc=RTC()
                     rtc.ntp_sync("pool.ntp.org")
                     time.timezone(3600)
-                    client = MQTTClient("solaire",MQTT_server, port = 1883,  keepalive = 100)
+                    client = MQTTClient("solaire",MQTT_server, port = MQTT_port,  keepalive = 100)
 # Connexion MQTT
                     try:
                         client.connect(clean_session=True)
@@ -347,6 +345,7 @@ while True:
                 except:
                     client.disconnect()
                     print('MQTT check message entrant erreur')
+                    etape_wifi = 1
                 if mes_send is True:
                     if DEBUG: print('Message MQTT: ', json.dumps(temp))
                     try:
@@ -354,9 +353,19 @@ while True:
                     except:
                         client.disconnect()
                         print('MQTT publication erreur')
-                else:
-                    client.ping()       # Keep alive command
-        #time.sleep(0.5)
+                        etape_wifi = 1
+                alive = not alive       # Toggle
+                client.publish('/regsol/alive', bytes(str(alive), "utf8"))
+        
+                if machine.reset_cause() == machine.WDT_RESET and not on_time:
+                    print('Reset par watchdog\n\n')
+                    txtlog = 'Reset watchdog: ' + str(time.localtime()) + '\n'
+                    f=open('log.txt','a+')
+                    f.write(txtlog)   
+                    f.close()
+                    on_time =True
+
+        time.sleep(0.5)
         if DEBUG: print('EtapeWifi : ', etape_wifi)
         if WATCHDOG: wdg.feed()
 client.disconnect()
