@@ -3,11 +3,11 @@
 #---------------------------------------------------------#
 """- Lecture de 5 capteurs de température OneWire DS18x20
         Raccorder un pull de 4.7k entre la pin data et le 3.3V
-        T1: Température capteur solaire
-        T2: Température bas de cuve
-        T3: Température haut de cuve
-        T4: Température arrivée échangeur
-        T5: Température retour échangeur """
+        Tcap: Température capteur solaire
+        Tcub: Température bas de cuve
+        Tcuh: Température haut de cuve
+        Taec: Température arrivée échangeur
+        Trec: Température retour échangeur """
 
 import time, json,  onewire,  machine
 from machine import  Pin, RTC, Timer
@@ -39,7 +39,8 @@ VOL_PULSE = 0.00444 # Litre par pulse du débimetre
 ON=const(1)
 OFF=const(0)
 NBTHERMO = 5 
-
+# Table d'affectations des capteurs suivants leur ID (ds.roms)
+AFFECT_TH = ['Tcap', 'Tcub', 'Trec', 'Tcuh', 'Taec']  # Ajuster l'ordre des items pour attribuer le bon ID des capteurs
 #------------- Variables globales -----------------
 mes_send=False
 
@@ -94,17 +95,17 @@ class   Solar_controller():
 
     def run(self, temps, dateh):
         """ Doc String """
-        self.debit = self._flowmeter(counter)
+        self.debit = self._flowmeter(self.pompe.value(), counter)
         temps['Q'] = self.debit
         # print(self.debit)
         if e_cde_manu.value() == 1:         # En manuel = 0
-            self.dT=temps['T1'] - temps['T2']
+            self.dT=temps['Tcap'] - temps['Tcub']
             if self.dT > self.secu_th :
         # Sécurité choc thermique dT > 50.0°C(demarrage pompe par impulsion)            
                 self.cpt+=1
                 if self.cpt==1:
                     self.pompe(ON)
-                    self._calc_puissance(temps['T4'],  temps['T5'], self.debit)
+                    self._calc_puissance(temps['Taec'],  temps['Trec'], self.debit)
                 elif self.cpt < self.N:
                     self.pompe(OFF)
                     self.pw =0
@@ -113,13 +114,13 @@ class   Solar_controller():
             # Test pour marche normale
             elif self.dT > self.seuil_start:
                 self.pompe(ON)
-                self._calc_puissance(temps['T4'],  temps['T5'], self.debit)
+                self._calc_puissance(temps['Taec'],  temps['Trec'], self.debit)
             # Test pour securité capteur solaire fort gel
-            elif temps['T1'] < self.seuil_tb:
+            elif temps['Tcap'] < self.seuil_tb:
                 self.pompe(ON)
                 self.pw = 0       
-            # Securite surchauffe ballon (refroidi le stock dans les panneaux la nuit si T cuve > 75 entre 1h00 et 8h00 du matin)
-            elif temps['T3'] > 75 and  dateh[3] > 0 and dateh[3] < 8:
+            # Securite surchauffe ballon (refroidi le stock dans les panneaux la nuit si T cuve > 80 entre 1h00 et 8h00 du matin)
+            elif temps['Tcuh'] > 80 and  dateh[3] > 0 and dateh[3] < 8:
                 self.pompe(ON)
                 self.pw=0
             else :
@@ -145,11 +146,14 @@ class   Solar_controller():
         return
 
 # Fonction débimetre par comptage impulsion sur une entrée logique (option)       
-    def   _flowmeter(self, cnt=None):
+    def   _flowmeter(self, pmp, cnt=None):
         ''' Debimetre a impulsion   ''' 
         global counter
         if cnt is None:
-            self.deb=data_levels['Qs']
+            if pmp == ON :
+                self.deb=data_levels['Qs']
+            else :
+                self.deb = 0
             return self.deb
         else:
             lock.acquire()
@@ -232,7 +236,7 @@ except:
     if len(dev) == NBTHERMO:
 # Affectation des thermometres et enregistrement (converti ID en int: bug bytearray en json)
         for i in range(len(dev)):
-            thermometres['T'+ chr(0x31+i)] = int.from_bytes(dev[i],'little') 
+            thermometres[AFFECT_TH[i]] = int.from_bytes(dev[i],'little') 
         f=open('thermo.dat','w')
         f.write(json.dumps(thermometres))
     else:
@@ -271,11 +275,12 @@ while True:
             all_t_read +=1
         
         if all_th is True:
+            if DEBUG : print('Heure courante :',t[3] )
 # Gestion solaire
             temp['PWR'], temp['ENR'], temp['PMP'] = reg.run(temp, t)
 # Cumul journalier de la puissance collecté a 0h01 heure
             print('{} {} {} {}:{}:{}  {}'.format(t[2], t[1], t[0], t[3], t[4], t[5], temp))
-            if t[3]==0 and t[4]==1 :
+            if t[3] == 0 and t[4] == 01 :
                 if flag is False :
                     try:
                         f=open('energie.dat', 'r')
@@ -287,6 +292,8 @@ while True:
                     finally:
                         f.close()
                         a += temp['ENR']
+                        pycom.nvs_set('power',int(0))
+                        reg.ew = 0.0
 # Remise a 0 cumul annuel au 1/1 a 0h01
                     if t[1]==1 and t[2]==1:
                         a=0.0
@@ -294,11 +301,12 @@ while True:
                     f.write(str(a))
                     f.close()
                     temp['ENR'] = 0.0
+                    pycom.nvs_set('power',int(0))
                     flag=True
             else:
                 flag=False
                 
-#Etape 0 : Initialisation connexion WIFI
+# Etape 0 : Initialisation connexion WIFI
             if etape_wifi == 0:
                 lswifi=[]
                 wlan=WLAN(mode=WLAN.STA)
@@ -308,7 +316,7 @@ while True:
                     print('Pas de wifi')
                 for r in lswifi:
 # freebox et signal > -80 dB                
-                    if r[0] == SSID and r[4] > -80 :      
+                    if r[0] == SSID and r[4] > -85 :      
 # Initialisation connexion WIFI
                         wlan.ifconfig(config='dhcp')
                         wlan.connect(SSID, auth=(WLAN.WPA2, PWID), timeout=50)
@@ -324,19 +332,23 @@ while True:
                     rtc.ntp_sync("pool.ntp.org")
                     time.timezone(3600)
                     client = MQTTClient("solaire",MQTT_server, port = MQTT_port,  keepalive = 100)
-# Connexion MQTT
-                    try:
-                        client.connect(clean_session=True)
-                        client.set_callback(incoming_mess)
-                        client.subscribe('/regsol/send', qos= 0)
-# client.subscribe('/regchauf/mesur', qos=0)    #------ Essai Ok -------
-                        print('Connecte au serveur MQTT : ',  MQTT_server)
-                        etape_wifi = 2
-                    except:
-                        print('MQTT connexion erreur')
+                    etape_wifi = 2
 
-# Etape 2 : Connexion WIFI et broker MQTT Ok, traite message publié et souscrit  
+# Etape 2 : Connexion MQTT
             if etape_wifi == 2:
+                try:
+                    client.connect(clean_session=True)
+                    client.set_callback(incoming_mess)
+                    client.subscribe('/regsol/send', qos= 0)
+                    print('Connecte au serveur MQTT : ',  MQTT_server)
+                    etape_wifi = 3
+                except:
+                    print('MQTT connexion erreur')
+                if not wlan.isconnected():
+                    etape_wifi = 0
+
+# Etape 3 : Connexion WIFI et broker MQTT Ok, traite message publié et souscrit  
+            if etape_wifi == 3:
                 if not wlan.isconnected():
                     etape_wifi = 0
                 try:
