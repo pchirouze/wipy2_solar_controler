@@ -200,6 +200,8 @@ def PinPulsecounter(arg):
 #
 #============= Debut Programme ====================        
 #
+# Led heartbeat 
+pycom.heartbeat(False)
 flag=False
 inp_count = Pin(P_FLOWMETER,mode=Pin.IN)
 inp_count.callback(Pin.IRQ_RISING, PinPulsecounter)
@@ -209,8 +211,6 @@ temp={}
 ds=onewire.DS18X20(onewire.OneWire(Pin(P_BUS_OW)))
 reg=Solar_controller(Pin(CDE_POMPE), data_levels)
 e_cde_manu = Pin(P_CIRC_MANU,mode=Pin.IN)
-# Led heartbeat 
-pycom.heartbeat(False)
 
 # Lecture fichier parametres
 try:
@@ -241,6 +241,7 @@ except:
         f.write(json.dumps(thermometres))
     else:
         print('Seulement ', len(dev), 'thermometres detectés sur ', NBTHERMO )
+        pycom.rgbled(0xff0000)          #LED en rouge defaut
         machine.reset()
 finally:
     f.close()
@@ -252,7 +253,7 @@ on_time = False
 # Init watchdog
 if WATCHDOG:
     wdg =machine.WDT(timeout = 15000)
-pycom.rgbled(0x000800)
+
 #====================
 # Boucle main
 #====================
@@ -260,12 +261,14 @@ while True:
     t=time.localtime()
 #Lecture thermometres OneWire (Raffraichi un thermometre par boucle)
     for key in thermometres:
+        pycom.rgbled(0x000800)
         idt= thermometres[key].to_bytes(8,'little')        
         ds.start_convertion(idt)
         time.sleep(0.7)
         t_lue = ds.read_temp_async(idt)/100.0
         if t_lue >=4095 : # ds18 debranché valeur = 4095.xx
             print('Defaut capteur ',key )
+            pycom.rgbled(0xff0000)
             temp[key]=0.0
         else:
             temp[key] = t_lue
@@ -375,8 +378,8 @@ while True:
                     f.write(txtlog)   
                     f.close()
                     on_time =True
-
-        time.sleep(0.5)
+        pycom.rgbled(0x000000)
+        time.sleep(0.7)
         if DEBUG: print('EtapeWifi : ', etape_wifi)
         if WATCHDOG: wdg.feed()
 client.disconnect()
