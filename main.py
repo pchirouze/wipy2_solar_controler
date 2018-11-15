@@ -250,6 +250,7 @@ all_th = False
 all_t_read = 0
 alive = False
 on_time = False
+temp_tm1 = {}
 # Init watchdog
 if WATCHDOG:
     wdg =machine.WDT(timeout = 15000)
@@ -271,7 +272,12 @@ while True:
             pycom.rgbled(0xff0000)
             temp[key]=0.0
         else:
-            temp[key] = t_lue
+            if len(temp_tm1) != NBTHERMO :
+                temp[key] = t_lue
+                temp_tm1[key] = t_lue
+            elif abs(temp_tm1[key] - t_lue) < 1.0 :
+                temp[key] = t_lue   # Filtre une valeur 
+            temp_tm1[key] = t_lue
         if all_t_read == NBTHERMO:
             all_th = True
         else:
