@@ -325,7 +325,7 @@ while True:
                     print('Pas de wifi')
                 for r in lswifi:
 # freebox et signal > -80 dB                
-                    if r[0] == SSID and r[4] > -85 :      
+                    if r[0] == SSID and r[4] > -80 :      
 # Initialisation connexion WIFI
                         wlan.ifconfig(config='dhcp')
                         wlan.connect(SSID, auth=(WLAN.WPA2, PWID), timeout=50)
@@ -359,6 +359,7 @@ while True:
 # Etape 3 : Connexion WIFI et broker MQTT Ok, traite message publié et souscrit  
             if etape_wifi == 3:
                 if not wlan.isconnected():
+                    print('Deconnexion WIFI')
                     etape_wifi = 0
                 try:
                     client.check_msg()
