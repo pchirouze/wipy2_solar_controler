@@ -34,7 +34,7 @@ P_CIRC_MANU = 'P4'
 # Entée impulsion débimetre
 P_FLOWMETER = 'P21'
 #  Liste parametres Dt sécurité choc th(SPh), Dt seuil marche pompe(SPn),Tcpt sécurité gel(SPb), debit(Qs) , N
-data_levels={'SPh':50.00, 'SPn':4.50, 'SPb': -12.00, 'Qs':720,  'N':5}  
+data_levels={'SPh':50.00, 'SPn':4.50, 'SPb': -12.00, 'Qs':680,  'N':5}  
 VOL_PULSE = 0.00444 # Litre par pulse du débimetre
 ON=const(1)
 OFF=const(0)
