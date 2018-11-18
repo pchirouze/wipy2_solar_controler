@@ -266,7 +266,7 @@ while True:
         idt= thermometres[key].to_bytes(8,'little')        
         ds.start_convertion(idt)
         time.sleep(0.7)
-        t_lue = ds.read_temp_async(idt)/100.0
+        t_lue = ds.read_temp_async(idt)
         if t_lue >=4095 : # ds18 debranché valeur = 4095.xx
             print('Defaut capteur ',key )
             pycom.rgbled(0xff0000)
@@ -287,30 +287,24 @@ while True:
             if DEBUG : print('Heure courante :',t[3] )
 # Gestion solaire
             temp['PWR'], temp['ENR'], temp['PMP'] = reg.run(temp, t)
-# Cumul journalier de la puissance collecté a 0h01 heure
+# Cumul journalier de la puissance collecté a 0h01 heure et date reseau Ok
             print('{} {} {} {}:{}:{}  {}'.format(t[2], t[1], t[0], t[3], t[4], t[5], temp))
-            if t[3] == 0 and t[4] == 01 :
+            if t[0] != 1970 and t[3] == 0 and t[4] == 1 :
                 if flag is False :
                     try:
-                        f=open('energie.dat', 'r')
+                        f=open('energie.csv', 'r')
                         a=float(f.read())
-                    except:
-                        f=open('energie.dat', 'w')
-                        a=0.0
-                        f.write(str(a))
-                    finally:
                         f.close()
+                    except:
+                        a = 0.0
+                    finally:
+                        f=open('energie.csv', 'a+')
                         a += temp['ENR']
+                        record = str(t[0]) + ',' + str(t[7]) + ',' + str(a) + '\n'
+                        f.write(record)
+                        f.close()
                         pycom.nvs_set('power',int(0))
                         reg.ew = 0.0
-# Remise a 0 cumul annuel au 1/1 a 0h01
-                    if t[1]==1 and t[2]==1:
-                        a=0.0
-                    f=open('energie.dat', 'w')
-                    f.write(str(a))
-                    f.close()
-                    temp['ENR'] = 0.0
-                    pycom.nvs_set('power',int(0))
                     flag=True
             else:
                 flag=False
@@ -325,7 +319,7 @@ while True:
                     print('Pas de wifi')
                 for r in lswifi:
 # freebox et signal > -80 dB                
-                    if r[0] == SSID and r[4] > -80 :      
+                    if r[0] == SSID and r[4] > -87 :      
 # Initialisation connexion WIFI
                         wlan.ifconfig(config='dhcp')
                         wlan.connect(SSID, auth=(WLAN.WPA2, PWID), timeout=50)
