@@ -289,7 +289,7 @@ while True:
             temp['PWR'], temp['ENR'], temp['PMP'] = reg.run(temp, t)
 # Cumul journalier de la puissance collecté a 0h01 heure et date reseau Ok
             print('{} {} {} {}:{}:{}  {}'.format(t[2], t[1], t[0], t[3], t[4], t[5], temp))
-            if t[0] != 1970 and t[3] == 0 and t[4] == 1 :
+            if t[0] != 1970 and t[3] == 23 and t[4] == 59 :
                 if flag is False :
                     try:
                         f=open('energie.csv', 'r')
