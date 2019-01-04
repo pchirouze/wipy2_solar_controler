@@ -267,6 +267,8 @@ while True:
         ds.start_convertion(idt)
         time.sleep(0.7)
         t_lue = ds.read_temp_async(idt)
+        if t_lue == None:
+            t_lue = temp[key] # Recupere derniere mesure valide(erreur CRC)
         if t_lue >=4095 : # ds18 debranché valeur = 4095.xx
             print('Defaut capteur ',key )
             pycom.rgbled(0xff0000)
