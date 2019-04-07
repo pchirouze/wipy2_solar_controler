@@ -120,7 +120,7 @@ class   Solar_controller():
                 self.pompe(ON)
                 self.pw = 0       
             # Securite surchauffe ballon (refroidi le stock dans les panneaux la nuit si T cuve > 80 entre 1h00 et 8h00 du matin)
-            elif temps['Tcuh'] > 80 and  dateh[3] > 0 and dateh[3] < 8:
+            elif temps['Tcub'] > 65 and  dateh[3] > 0 and dateh[3] < 8:
                 self.pompe(ON)
                 self.pw=0
             else :
@@ -133,6 +133,7 @@ class   Solar_controller():
             return self.pw,  self.ew,  self.pompe()
 
     def _calc_puissance(self,  ta, td, flow):
+        ''' Calcul puissance instantané et puissance cumulé, enregistrement en memoire RAM non volatile '''
         if flow > 0:
             self.pw=((ta-td)*1.16*flow/1000)
             if self.pw > 0:
