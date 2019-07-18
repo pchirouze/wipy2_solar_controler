@@ -46,7 +46,10 @@ mes_send=False
 
 #MQTT_server="iot.eclipse.org"
 MQTT_server="m23.cloudmqtt.com"
-MQTT_port = 1883
+MQTT_PORT = 15201
+MQTT_USER = 'ixkefaip'
+MQTT_PASSW = 'Hf-lHiOHlb_p'
+
 etape_wifi = 0
 # Pas de débimetre : counter = None
 counter = None
@@ -337,7 +340,7 @@ while True:
                     rtc=RTC()
                     rtc.ntp_sync("pool.ntp.org")
                     time.timezone(3600)
-                    client = MQTTClient("solaire",MQTT_server, port = MQTT_port,  keepalive = 100)
+                    client = MQTTClient("solaire",MQTT_server, MQTT_PORT, MQTT_USER, MQTT_PASSW, keepalive = 100)
                     etape_wifi = 2
 
 # Etape 2 : Connexion MQTT
