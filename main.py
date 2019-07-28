@@ -386,7 +386,7 @@ while True:
                     f.close()
                     on_time =True
         pycom.rgbled(0x000000)
-        time.sleep(0.7)
+        time.sleep(1.0)
         if DEBUG: print('EtapeWifi : ', etape_wifi)
         if WATCHDOG: wdg.feed()
 client.disconnect()
