@@ -82,11 +82,11 @@ class   Solar_controller():
         self.debit=int(data['Qs'])
         self.N=int(data['N'])
         self.cpt=0
-        if pycom.nvs_get('power') is None:
-            pycom.nvs_set('power',0)
-            self.ew = 0.0
-        else:
+        try:
             self.ew = float(pycom.nvs_get('power')/100)
+        except:
+            pycom.nvs_set('power',0)
+        self.ew = 0.0
         self.pw=0.0
         self.start_t=time.ticks_ms()
         self.pompe(OFF)
@@ -211,7 +211,6 @@ inp_count = Pin(P_FLOWMETER,mode=Pin.IN)
 inp_count.callback(Pin.IRQ_RISING, PinPulsecounter)
 lock = _thread.allocate_lock()
 temp={}
-
 ds=onewire.DS18X20(onewire.OneWire(Pin(P_BUS_OW)))
 reg=Solar_controller(Pin(CDE_POMPE), data_levels)
 e_cde_manu = Pin(P_CIRC_MANU,mode=Pin.IN)
@@ -246,6 +245,7 @@ except:
     else:
         print('Seulement ', len(dev), 'thermometres detectés sur ', NBTHERMO )
         pycom.rgbled(0xff0000)          #LED en rouge defaut
+        time.sleep(5.0)
         machine.reset()
 finally:
     f.close()
