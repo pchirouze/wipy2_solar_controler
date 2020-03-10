@@ -327,7 +327,8 @@ while True:
 # freebox et signal > -80 dB                
                     if r[0] == SSID and r[4] > -87 :      
 # Initialisation connexion WIFI
-                        wlan.ifconfig(config='dhcp')
+#                        wlan.ifconfig(config='dhcp')
+                        wlan.ifconfig(config=('192.168.0.31', '255.255.255.0', '192.168.0.254', '212.27.40.240'))
                         wlan.connect(SSID, auth=(WLAN.WPA2, PWID), timeout=50)
                         time.sleep(2)       # Time sleep indispensable
                         etape_wifi=1
@@ -386,7 +387,7 @@ while True:
                     f.close()
                     on_time =True
         pycom.rgbled(0x000000)
-        time.sleep(1.0)
+        time.sleep(1.5)
         if DEBUG: print('EtapeWifi : ', etape_wifi)
         if WATCHDOG: wdg.feed()
 client.disconnect()
