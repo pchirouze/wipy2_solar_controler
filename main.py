@@ -22,9 +22,6 @@ WATCHDOG = True
 DEBUG = True
 #DEBUG = False
 # ----------- Constantes -------------
-# WIFI ID et PSWD
-SSID='freebox_PC'
-PWID='parapente'
 # N° port commande circulateur solaire
 CDE_POMPE = 'P19'    
 # N° port data bus OneWire
@@ -43,12 +40,24 @@ NBTHERMO = 5
 AFFECT_TH = ['Tcap', 'Tcub', 'Trec', 'Tcuh', 'Taec']  # Ajuster l'ordre des items pour attribuer le bon ID des capteurs
 #------------- Variables globales -----------------
 mes_send=False
+ 
+# Connexion Wifi IP, mask, dhcp, dns
+WIFI_C = ('192.168.0.31', '255.255.255.0', '192.168.0.254', '212.27.40.240')
+# WIFI ID et PSWD
+SSID='freebox_PC'
+PWID='parapente'
 
-#MQTT_server="iot.eclipse.org"
-MQTT_server="m23.cloudmqtt.com"
-MQTT_PORT = 15201
-MQTT_USER = 'ixkefaip'
-MQTT_PASSW = 'Hf-lHiOHlb_p'
+# Broker MQTT Mosquitto sur Raspberry PI 4 sur reseau local IP configuré par le routeur de la freebox
+MQTT_server="192.168.0.41"
+MQTT_PORT = 1883
+MQTT_USER = ''
+MQTT_PASSW = ''
+
+# Broker MQTT cloudmqtt.com payant depuis le 30/04/2020 
+#MQTT_server="m23.cloudmqtt.com"
+#MQTT_PORT = 15201
+#MQTT_USER = 'ixkefaip'
+#MQTT_PASSW = 'Hf-lHiOHlb_p'
 
 etape_wifi = 0
 # Pas de débimetre : counter = None
@@ -326,9 +335,9 @@ while True:
                 for r in lswifi:
 # freebox et signal > -80 dB                
                     if r[0] == SSID and r[4] > -87 :      
-# Initialisation connexion WIFI
+# Initialisation connexion WIFI 
 #                        wlan.ifconfig(config='dhcp')
-                        wlan.ifconfig(config=('192.168.0.31', '255.255.255.0', '192.168.0.254', '212.27.40.240'))
+                        wlan.ifconfig(config = ('192.168.0.51', '255.255.255.0', '192.168.0.254', '212.27.40.240'))
                         wlan.connect(SSID, auth=(WLAN.WPA2, PWID), timeout=50)
                         time.sleep(2)       # Time sleep indispensable
                         etape_wifi=1
@@ -339,14 +348,15 @@ while True:
                     print('Connecte WIFI : ',  wlan.ifconfig())
 # Lecture fournisseur date/heure et init timer, creation client MQTT
                     rtc=RTC()
-                    rtc.ntp_sync("pool.ntp.org")
+#                    rtc.ntp_sync("pool.ntp.org")
+                    rtc.ntp_sync("ntp.midway.ovh")
                     time.timezone(3600)
-                    client = MQTTClient("solaire",MQTT_server, MQTT_PORT, MQTT_USER, MQTT_PASSW, keepalive = 100)
                     etape_wifi = 2
 
 # Etape 2 : Connexion MQTT
             if etape_wifi == 2:
                 try:
+                    client = MQTTClient("solaire",MQTT_server, MQTT_PORT, MQTT_USER, MQTT_PASSW) 
                     client.connect(clean_session=True)
                     client.set_callback(incoming_mess)
                     client.subscribe('/regsol/send', qos= 0)
