@@ -47,6 +47,8 @@ WIFI_C = ('192.168.0.31', '255.255.255.0', '192.168.0.254', '212.27.40.240')
 SSID='freebox_PC'
 PWID='parapente'
 
+NTP_SERVER = "ntp.deuza.net"
+
 # Broker MQTT Mosquitto sur Raspberry PI 4 sur reseau local IP configuré par le routeur de la freebox
 MQTT_server="192.168.0.41"
 MQTT_PORT = 1883
@@ -348,8 +350,7 @@ while True:
                     print('Connecte WIFI : ',  wlan.ifconfig())
 # Lecture fournisseur date/heure et init timer, creation client MQTT
                     rtc=RTC()
-#                    rtc.ntp_sync("pool.ntp.org")
-                    rtc.ntp_sync("ntp.midway.ovh")
+                    rtc.ntp_sync(NTP_SERVER)
                     time.timezone(3600)
                     etape_wifi = 2
 
