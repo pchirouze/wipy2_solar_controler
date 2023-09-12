@@ -47,7 +47,8 @@ WIFI_C = ('192.168.0.31', '255.255.255.0', '192.168.0.254', '212.27.40.240')
 SSID='freebox_PC'
 PWID='parapente'
 
-NTP_SERVER = "ntp.deuza.net"
+#NTP_SERVER = "ntp.deuza.net"
+NTP_SERVER = "pool.ntp.org"
 
 # Broker MQTT Mosquitto sur Raspberry PI 4 sur reseau local IP configuré par le routeur de la freebox
 MQTT_server="192.168.0.41"
